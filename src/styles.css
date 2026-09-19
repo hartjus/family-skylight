@@ -1,0 +1,28 @@
+:root { font-family: Inter, system-ui, sans-serif; }
+body { margin: 0; min-width: 320px; }
+.masonry { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--mantine-spacing-md); align-items: start; }
+.dashboard-tile { min-height: 160px; }
+.dashboard-tile-dragging { opacity: .55; box-shadow: var(--mantine-shadow-lg); z-index: 1; }
+.tile-drag-grip { cursor: grab; touch-action: none; }
+.tile-drag-grip:active { cursor: grabbing; }
+.tile-resize-grip { cursor: ew-resize; touch-action: none; }
+.weather-today { padding: 4px 0 8px; }
+.weather-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--mantine-spacing-xs); }
+.weather-day { min-width: 0; padding: 6px 2px; border-radius: var(--mantine-radius-sm); background: var(--mantine-color-default-hover); }
+.event-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.event-line { padding: 4px 0; }
+.event-card { border-left: 4px solid; border-radius: var(--mantine-radius-sm); padding: 8px 10px; text-align: left; width: 100%; cursor: pointer; }
+.event-card:hover { filter: brightness(.96); }
+.past-event { text-decoration: line-through; opacity: .72; }
+.event-detail-accent { height: 5px; border-radius: 999px; }
+.week-panel { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--mantine-color-default-border); border-radius: var(--mantine-radius-sm); overflow: hidden; }
+.week-day { min-height: 160px; padding: var(--mantine-spacing-xs); border-right: 1px solid var(--mantine-color-default-border); }
+.week-day:last-child { border-right: 0; }
+.week-day-today { background: var(--mantine-primary-color-light); }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--mantine-color-default-border); border-left: 1px solid var(--mantine-color-default-border); }
+.weekday { padding: 8px; text-align: center; }
+.calendar-day { min-height: 126px; border-radius: 0; border: 0; border-right: 1px solid var(--mantine-color-default-border); border-bottom: 1px solid var(--mantine-color-default-border); padding: 8px; overflow: hidden; }
+.outside-month { opacity: .45; }
+.month-event { border-left: 3px solid; margin-top: 4px; padding-left: 4px; text-align: left; width: 100%; cursor: pointer; }
+.item-input { flex: 1; }
+@media (max-width: 48em) { .masonry { grid-template-columns: 1fr; } .dashboard-tile { grid-column: span 1 !important; } .week-panel { overflow-x: auto; grid-template-columns: repeat(7, minmax(150px, 1fr)); } .week-day { min-height: 140px; } .weather-week { overflow-x: auto; grid-template-columns: repeat(7, minmax(76px, 1fr)); } .calendar-day { min-height: 88px; padding: 4px; } .weekday { font-size: 11px; padding: 4px; } }
