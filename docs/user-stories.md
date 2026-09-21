@@ -224,12 +224,12 @@ As a household member, I want to add, edit, and delete items in shared lists so 
 
 **Priority:** P0
 
-As a household member, I want to mark list items complete while keeping them visible so that completed work is recognizable without losing context.
+As a household member, I want to mark list items complete while keeping them visible briefly so that completed work is recognizable without permanently cluttering the list.
 
 **Acceptance criteria:**
 
 - A user can mark an item complete and later mark it incomplete.
-- Completed items remain in their original list until deleted.
+- Completed items remain visible in their original list for 24 hours, then are filtered from list and dashboard views.
 - Completed items use strikethrough and muted gray styling that is visually distinct from incomplete items.
 - Completion state persists after reloading or restarting the application.
 
