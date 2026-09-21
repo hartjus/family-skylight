@@ -130,7 +130,7 @@ As a household member, I want to see the remaining events in the current calenda
 
 **Acceptance criteria:**
 
-- The dashboard includes events remaining after today through Saturday of the current Pacific-time week.
+- The dashboard includes at most five events starting during the next three Pacific-time calendar days.
 - Each event shows its title, date when needed, Pacific time or all-day state, calendar color, and location when present.
 - Events from all included calendars are presented together in chronological order.
 
