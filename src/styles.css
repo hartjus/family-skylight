@@ -25,4 +25,4 @@ body { margin: 0; min-width: 320px; }
 .outside-month { opacity: .45; }
 .month-event { border-left: 3px solid; border-radius: var(--mantine-radius-sm); margin-top: 4px; padding: 4px 6px; text-align: left; width: 100%; cursor: pointer; }
 .item-input { flex: 1; }
-@media (max-width: 48em) { .masonry { grid-template-columns: 1fr; } .dashboard-tile { grid-column: span 1 !important; } .week-panel { overflow-x: auto; grid-template-columns: repeat(7, minmax(150px, 1fr)); } .week-day { min-height: 140px; } .weather-week { overflow-x: auto; grid-template-columns: repeat(7, minmax(76px, 1fr)); } .calendar-day { min-height: 88px; padding: 4px; } .weekday { font-size: 11px; padding: 4px; } }
+@media (max-width: 48em) { .masonry { grid-template-columns: 1fr; } .dashboard-tile { grid-column: span 1 !important; } .desktop-menu-toggle { display: none !important; } .week-panel { overflow-x: auto; grid-template-columns: repeat(7, minmax(150px, 1fr)); } .week-day { min-height: 140px; } .weather-week { overflow-x: auto; grid-template-columns: repeat(7, minmax(76px, 1fr)); } .calendar-day { min-height: 88px; padding: 4px; } .weekday { font-size: 11px; padding: 4px; } }
