@@ -9,6 +9,13 @@ body { margin: 0; min-width: 320px; }
 .weather-today { padding: 4px 0 8px; }
 .weather-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--mantine-spacing-xs); }
 .weather-day { min-width: 0; padding: 6px 2px; border-radius: var(--mantine-radius-sm); background: var(--mantine-color-default-hover); }
+.seasonal-accent { font-size: 1.25rem; line-height: 1; user-select: none; }
+.seasonal-accent-winter { color: var(--mantine-color-blue-5); }
+.seasonal-accent-spring { color: var(--mantine-color-green-6); }
+.seasonal-accent-summer { color: var(--mantine-color-yellow-7); }
+.seasonal-accent-autumn { color: var(--mantine-color-orange-6); }
+.full-moon-indicator { color: var(--mantine-color-violet-5); }
+@media (prefers-reduced-motion: no-preference) { .seasonal-accent { animation: seasonal-drift 4s ease-in-out infinite; } @keyframes seasonal-drift { 50% { transform: translateY(-2px) rotate(4deg); } } }
 .event-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
 .event-line { padding: 4px 0; }
 .event-card { border-left: 4px solid; border-radius: var(--mantine-radius-sm); padding: 8px 10px; text-align: left; width: 100%; cursor: pointer; }

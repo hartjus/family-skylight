@@ -204,6 +204,11 @@ async function syncSource(sourceId: number) {
     db.prepare('UPDATE sources SET last_sync_at=?, last_error=NULL WHERE id=?').run(isoNow(), sourceId);
   } catch (error) { db.prepare('UPDATE sources SET last_error=? WHERE id=?').run(error instanceof Error ? error.message : 'Sync failed', sourceId); throw error; }
 }
+async function syncAllSources() {
+  const sources = db.prepare('SELECT id FROM sources').all() as Array<{ id: number }>;
+  const results = await Promise.allSettled(sources.map(source => syncSource(source.id)));
+  return { total: sources.length, failed: results.filter(result => result.status === 'rejected').length };
+}
 
 app.get('/api/health', async () => ({ ok: true }));
 app.get('/api/settings', async () => serializeSettings());
@@ -231,6 +236,7 @@ app.post('/api/weather/location', async (request, reply) => { try {
 app.get('/api/weather', async (_request, reply) => { try { return await weatherForecast(); } catch (error) { return fail(reply, error); } });
 app.get('/api/sources', async () => serializeSources());
 app.post('/api/sources/ical', async (request, reply) => { try { const body = asObject(request.body); const url = secretGoogleIcalUrl(requiredText(body.url, 'Secret Google Calendar iCal URL')); const label = typeof body.label === 'string' && body.label.trim() ? body.label.trim() : 'Google Calendar'; const result = db.prepare('INSERT INTO sources(kind,label,encrypted_tokens) VALUES(?,?,?)').run('public', label, encrypt(url)); db.prepare('INSERT INTO calendars(source_id,external_id,title,color) VALUES(?,?,?,?)').run(result.lastInsertRowid, `ical-${result.lastInsertRowid}`, label, '#4c6ef5'); await syncSource(Number(result.lastInsertRowid)); return reply.code(201).send(serializeSources().find((source: any) => source.id === result.lastInsertRowid)); } catch (error) { return fail(reply, error); } });
+app.post('/api/sources/sync', async () => syncAllSources());
 app.post('/api/sources/:id/sync', async (request, reply) => { try { await syncSource(id((request.params as Row).id)); return { ok: true }; } catch (error) { return fail(reply, error); } });
 app.delete('/api/sources/:id', async (request, reply) => { try { const result = db.prepare('DELETE FROM sources WHERE id=?').run(id((request.params as Row).id)); if (!result.changes) throw new Error('Invalid id'); return reply.code(204).send(); } catch (error) { return fail(reply, error); } });
 app.patch('/api/calendars/:id', async (request, reply) => { try { const calendarId = id((request.params as Row).id); const body = asObject(request.body); const result = db.prepare('UPDATE calendars SET color=COALESCE(?,color), enabled=COALESCE(?,enabled) WHERE id=?').run(typeof body.color === 'string' ? body.color : null, typeof body.enabled === 'boolean' ? Number(body.enabled) : null, calendarId); if (!result.changes) throw new Error('Invalid id'); if (body.enabled === true) { const calendar = db.prepare('SELECT source_id FROM calendars WHERE id=?').get(calendarId) as { source_id: number }; await syncSource(calendar.source_id); } return { ok: true }; } catch (error) { return fail(reply, error); } });
@@ -250,5 +256,5 @@ if (process.env.NODE_ENV === 'production' && fs.existsSync(path.join(root, 'dist
   app.get('/*', (_request, reply) => reply.sendFile('index.html'));
 }
 
-setTimeout(() => { const run = () => Promise.allSettled((db.prepare('SELECT id FROM sources').all() as Array<{ id: number }>).map(source => syncSource(source.id))); void run(); setInterval(run, 60 * 60 * 1000); }, 5_000);
+setTimeout(() => { const run = () => syncAllSources(); void run(); setInterval(run, 60 * 60 * 1000); }, 5_000);
 await app.listen({ port: Number(process.env.PORT ?? 3000), host: '0.0.0.0' });

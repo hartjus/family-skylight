@@ -85,6 +85,7 @@ As a household member, I want the displayed events to refresh automatically so t
 **Acceptance criteria:**
 
 - The system attempts a background refresh for every included source at least once per hour.
+- An administrator can manually start a refresh of every saved iCal feed from Administration; each feed is downloaded and its event and recurrence cache is rebuilt using the normal sync rules.
 - A successful refresh adds, updates, and removes events to match the source calendar data.
 - The UI shows the time of the last successful synchronization.
 - If a refresh fails, previously synchronized events remain visible and the UI shows that the source may be stale.

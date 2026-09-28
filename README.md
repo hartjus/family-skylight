@@ -11,6 +11,19 @@ Family Skylight is a local-first household calendar and shared-list display desi
 
 For the Pi deployment, run `npm run build` and then `npm start`. The Fastify process serves the compiled UI and API at port 3000 by default. Set `PORT` to change it.
 
+## Raspberry Pi installation
+
+On the Pi, ensure the checkout is at `/Github/family-skylight`, is owned by `jhart`, and has a configured `.env` file. Node.js and npm must be available to `jhart`. Then run:
+
+```bash
+cd /Github/family-skylight
+./scripts/install-pi.sh
+```
+
+The installer stops a previous Family Skylight process, fast-forwards the checkout with `git pull`, installs locked dependencies, builds the app, and creates/enables the `family-skylight` systemd service. The service runs `npm start` as `jhart` at boot, without an interactive login. Application data and `.env` are retained.
+
+Use `sudo systemctl status family-skylight` to check the service and `sudo journalctl -u family-skylight -f` to follow its logs.
+
 ## Google Calendar behavior
 
 - Add each calendar using its **Secret address in iCal format** from Google Calendar’s Integrate calendar settings.
