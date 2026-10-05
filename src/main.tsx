@@ -261,7 +261,7 @@ function pacificHour(value: Date) {
   );
 }
 function dashboardClock(value: Date) {
-  return `${value.toLocaleDateString(undefined, { timeZone: "America/Los_Angeles", month: "long", day: "numeric" })} ${value.toLocaleTimeString([], { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" })}`;
+  return `${value.toLocaleDateString(undefined, { timeZone: "America/Los_Angeles", month: "long", day: "numeric" })}, ${value.toLocaleTimeString([], { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" })}`;
 }
 function seasonalAccent(value: Date) {
   const month = Number(
@@ -907,8 +907,8 @@ function Dashboard({
   if (loading) return <Loader />;
   return (
     <Stack gap="lg">
-      <Group justify="space-between">
-        <Box>
+      <div className="dashboard-header">
+        <Box className="dashboard-heading">
           <Group gap="sm" align="baseline">
             <Title order={1}>Good {greeting}</Title>
             <Text
@@ -918,18 +918,6 @@ function Dashboard({
             >
               {season.symbol}
             </Text>
-            <Group gap={4} align="center">
-              <Text c="dimmed">{dashboardClock(now)}</Text>
-              {fullMoon && (
-                <Tooltip label="Full moon tonight">
-                  <IconMoon
-                    className="full-moon-indicator"
-                    size={18}
-                    aria-label="Full moon tonight"
-                  />
-                </Tooltip>
-              )}
-            </Group>
           </Group>
           <Text c={data?.hasSyncError ? "red" : "dimmed"} size="sm">
             {data?.hasSyncError
@@ -939,7 +927,21 @@ function Dashboard({
                 : "No calendars connected yet."}
           </Text>
         </Box>
-        <Group>
+        <Group className="dashboard-clock" gap="xs" justify="center">
+          <Text size="xl" fw={700}>
+            {dashboardClock(now)}
+          </Text>
+          {fullMoon && (
+            <Tooltip label="Full moon tonight">
+              <IconMoon
+                className="full-moon-indicator"
+                size={22}
+                aria-label="Full moon tonight"
+              />
+            </Tooltip>
+          )}
+        </Group>
+        <Group className="dashboard-actions">
           <Button
             variant={editing ? "filled" : "light"}
             onClick={() => setEditing(!editing)}
@@ -955,7 +957,7 @@ function Dashboard({
             <IconRefresh />
           </ActionIcon>
         </Group>
-      </Group>
+      </div>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -1798,7 +1800,11 @@ function App() {
           </Stack>
         </AppShell.Navbar>
         <AppShell.Main>
-          <Container size="xl" py="md">
+          <Container
+            className={page === "dashboard" ? "dashboard-container" : undefined}
+            size={page === "dashboard" ? "100%" : "xl"}
+            py="md"
+          >
             {pages[page]}
           </Container>
         </AppShell.Main>

@@ -1,5 +1,10 @@
 :root { font-family: Inter, system-ui, sans-serif; }
 body { margin: 0; min-width: 320px; }
+.dashboard-container { max-width: none; padding-inline: var(--mantine-spacing-sm); }
+.dashboard-header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--mantine-spacing-md); }
+.dashboard-heading { min-width: 0; }
+.dashboard-clock { justify-self: center; line-height: 1.2; text-align: center; white-space: nowrap; }
+.dashboard-actions { justify-self: end; }
 .masonry { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--mantine-spacing-md); align-items: start; }
 .dashboard-tile { min-height: 160px; }
 .dashboard-tile-dragging { opacity: .55; box-shadow: var(--mantine-shadow-lg); z-index: 1; }
@@ -32,4 +37,4 @@ body { margin: 0; min-width: 320px; }
 .outside-month { opacity: .45; }
 .month-event { border-left: 3px solid; border-radius: var(--mantine-radius-sm); margin-top: 4px; padding: 4px 6px; text-align: left; width: 100%; cursor: pointer; }
 .item-input { flex: 1; }
-@media (max-width: 48em) { .masonry { grid-template-columns: 1fr; } .dashboard-tile { grid-column: span 1 !important; } .desktop-menu-toggle { display: none !important; } .week-panel { overflow-x: auto; grid-template-columns: repeat(7, minmax(150px, 1fr)); } .week-day { min-height: 140px; } .weather-week { overflow-x: auto; grid-template-columns: repeat(7, minmax(76px, 1fr)); } .calendar-day { min-height: 88px; padding: 4px; } .weekday { font-size: 11px; padding: 4px; } }
+@media (max-width: 48em) { .dashboard-container { padding-inline: var(--mantine-spacing-xs); } .dashboard-header { grid-template-columns: 1fr; justify-items: center; text-align: center; } .dashboard-heading, .dashboard-actions { justify-self: center; } .dashboard-clock { grid-row: 1; } .masonry { grid-template-columns: 1fr; } .dashboard-tile { grid-column: span 1 !important; } .desktop-menu-toggle { display: none !important; } .week-panel { overflow-x: auto; grid-template-columns: repeat(7, minmax(150px, 1fr)); } .week-day { min-height: 140px; } .weather-week { overflow-x: auto; grid-template-columns: repeat(7, minmax(76px, 1fr)); } .calendar-day { min-height: 88px; padding: 4px; } .weekday { font-size: 11px; padding: 4px; } }
