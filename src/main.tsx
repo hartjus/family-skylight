@@ -519,7 +519,7 @@ function WeatherWeek({ weather }: { weather: WeatherForecast }) {
     </div>
   );
 }
-function currentPacificWeek() {
+function currentPacificWeek(weekStartsMonday = false) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles",
     year: "numeric",
@@ -533,6 +533,7 @@ function currentPacificWeek() {
   );
   const sunday = new Date(today);
   sunday.setUTCDate(today.getUTCDate() - today.getUTCDay());
+  if (weekStartsMonday) sunday.setUTCDate(sunday.getUTCDate() + 1);
   return Array.from(
     { length: 7 },
     (_, index) => new Date(sunday.getTime() + index * 864e5),
@@ -722,8 +723,11 @@ function Dashboard({
   const season = seasonalAccent(now);
   const fullMoon = isFullMoon(now);
   const [weekStart, setWeekStart] = useState(() => currentPacificWeek()[0]);
+  const [weekStartsMonday, setWeekStartsMonday] = useState(false);
   const weekStartKey = pacificIsoDate(weekStart);
-  const currentWeekStartKey = pacificIsoDate(currentPacificWeek()[0]);
+  const currentWeekStartKey = pacificIsoDate(
+    currentPacificWeek(weekStartsMonday)[0],
+  );
   const { data: weekEvents = [] } = useRequest<Event[]>(
     `/weeks?start=${encodeURIComponent(weekStartKey)}`,
     refreshMinutes,
@@ -760,7 +764,9 @@ function Dashboard({
               size="compact-xs"
               variant="light"
               disabled={weekStartKey === currentWeekStartKey}
-              onClick={() => setWeekStart(currentPacificWeek()[0])}
+              onClick={() =>
+                setWeekStart(currentPacificWeek(weekStartsMonday)[0])
+              }
             >
               Current
             </Button>
@@ -771,6 +777,19 @@ function Dashboard({
             >
               Next
             </Button>
+            <Switch
+              size="sm"
+              label="Mon–Sun"
+              checked={weekStartsMonday}
+              onChange={(event) => {
+                const startsMonday = event.currentTarget.checked;
+                setWeekStartsMonday(startsMonday);
+                setWeekStart((start) =>
+                  new Date(start.getTime() + (startsMonday ? 1 : -1) * 864e5),
+                );
+              }}
+              aria-label="Start week on Monday"
+            />
           </Group>
         ),
         content: (
@@ -860,6 +879,7 @@ function Dashboard({
       weekStart,
       weekStartKey,
       currentWeekStartKey,
+      weekStartsMonday,
     ],
   );
   const ordered = [...tiles].sort(
