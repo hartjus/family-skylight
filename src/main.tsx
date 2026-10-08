@@ -1,7 +1,7 @@
 import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
 import "./styles.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
   AppShell,
@@ -357,7 +357,7 @@ function useRequest<T>(
 
 const isPastEvent = (event: Event) =>
   !event.allDay && new Date(event.endAt).getTime() < Date.now();
-function EventLine({
+const EventLine = memo(function EventLine({
   event,
   showDate = false,
   onOpen,
@@ -390,7 +390,7 @@ function EventLine({
       )}
     </UnstyledButton>
   );
-}
+});
 function EventDetailModal({
   event,
   onClose,
@@ -539,7 +539,7 @@ function currentPacificWeek(weekStartsMonday = false) {
     (_, index) => new Date(sunday.getTime() + index * 864e5),
   );
 }
-function WeekPanel({
+const WeekPanel = memo(function WeekPanel({
   events,
   weekStart,
   onOpenEvent,
@@ -597,7 +597,7 @@ function WeekPanel({
       })}
     </div>
   );
-}
+});
 
 function ResizeGrip({
   tile,
@@ -632,25 +632,35 @@ function ResizeGrip({
   );
 }
 
-function SortableDashboardTile({
+const DashboardTileCard = memo(function DashboardTileCard({
   tile,
   span,
   editing,
   onResize,
+  dragProps,
 }: {
   tile: DashboardTile;
   span: number;
   editing: boolean;
   onResize: (span: number) => void;
+  dragProps?: {
+    attributes: object;
+    listeners: object | undefined;
+    setNodeRef: (element: HTMLElement | null) => void;
+    transform: Parameters<typeof CSS.Transform.toString>[0];
+    transition: string | undefined;
+    isDragging: boolean;
+  };
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: tile.key, disabled: !editing });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    dragProps ?? {
+      attributes: {},
+      listeners: undefined,
+      setNodeRef: () => undefined,
+      transform: null,
+      transition: undefined,
+      isDragging: false,
+    };
   return (
     <Card
       ref={setNodeRef}
@@ -691,6 +701,43 @@ function SortableDashboardTile({
       </Group>
       <Stack gap="xs">{tile.content}</Stack>
     </Card>
+  );
+});
+
+function SortableDashboardTile({
+  tile,
+  span,
+  editing,
+  onResize,
+}: {
+  tile: DashboardTile;
+  span: number;
+  editing: boolean;
+  onResize: (span: number) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: tile.key, disabled: !editing });
+  return (
+    <DashboardTileCard
+      tile={tile}
+      span={span}
+      editing={editing}
+      onResize={onResize}
+      dragProps={{
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+      }}
+    />
   );
 }
 
@@ -924,6 +971,38 @@ function Dashboard({
     });
     persistLayout(next);
   };
+  const noopResize = useCallback(() => undefined, []);
+  const tileGrid = (
+    <div className="masonry">
+      {ordered.map((tile) => {
+        const span =
+          tile.key === "week"
+            ? 2
+            : (layout[tile.key]?.span ??
+              (tile.key === "weather-week" ? 2 : 1));
+        const onResize = editing
+          ? (nextSpan: number) => saveSpan(tile.key, nextSpan)
+          : noopResize;
+        return editing ? (
+          <SortableDashboardTile
+            key={tile.key}
+            tile={tile}
+            span={span}
+            editing={editing}
+            onResize={onResize}
+          />
+        ) : (
+          <DashboardTileCard
+            key={tile.key}
+            tile={tile}
+            span={span}
+            editing={editing}
+            onResize={onResize}
+          />
+        );
+      })}
+    </div>
+  );
   if (loading) return <Loader />;
   return (
     <Stack gap="lg">
@@ -978,33 +1057,22 @@ function Dashboard({
           </ActionIcon>
         </Group>
       </div>
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={onDragEnd}
-      >
-        <SortableContext
-          items={ordered.map((tile) => tile.key)}
-          strategy={rectSortingStrategy}
+      {editing ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={onDragEnd}
         >
-          <div className="masonry">
-            {ordered.map((tile) => (
-              <SortableDashboardTile
-                key={tile.key}
-                tile={tile}
-                span={
-                  tile.key === "week"
-                    ? 2
-                    : (layout[tile.key]?.span ??
-                      (tile.key === "weather-week" ? 2 : 1))
-                }
-                editing={editing}
-                onResize={(span) => saveSpan(tile.key, span)}
-              />
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
+          <SortableContext
+            items={ordered.map((tile) => tile.key)}
+            strategy={rectSortingStrategy}
+          >
+            {tileGrid}
+          </SortableContext>
+        </DndContext>
+      ) : (
+        tileGrid
+      )}
     </Stack>
   );
 }
@@ -1719,7 +1787,7 @@ function App() {
     { key: "dashboard", label: "Dashboard", icon: IconLayoutDashboard },
     { key: "calendar", label: "Calendar", icon: IconCalendarMonth },
     { key: "lists", label: "Shared lists", icon: IconListCheck },
-    { key: "admin", label: "Admin", icon: IconSettings },
+    { key: "admin", label: "Settings", icon: IconSettings },
   ];
   const selectPage = (nextPage: string) => {
     setPage(nextPage);
@@ -1819,7 +1887,7 @@ function App() {
             )}
           </Stack>
         </AppShell.Navbar>
-        <AppShell.Main>
+        <AppShell.Main className="app-shell-main">
           <Container
             className={page === "dashboard" ? "dashboard-container" : undefined}
             size={page === "dashboard" ? "100%" : "xl"}

@@ -7,6 +7,7 @@ import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { parseCalendarEvents, type ParsedCalendarEvent } from './ical.js';
+import { pacificWeekWindowForDate } from './week.js';
 
 type Row = Record<string, unknown>;
 
@@ -133,14 +134,6 @@ function pacificWeekWindow(now = new Date()) {
   const sunday = new Date(today); sunday.setUTCDate(today.getUTCDate() - today.getUTCDay());
   const saturdayAfter = new Date(sunday); saturdayAfter.setUTCDate(sunday.getUTCDate() + 7);
   return { start: pacificMidnight(sunday.getUTCFullYear(), sunday.getUTCMonth() + 1, sunday.getUTCDate()), end: pacificMidnight(saturdayAfter.getUTCFullYear(), saturdayAfter.getUTCMonth() + 1, saturdayAfter.getUTCDate()) };
-}
-function pacificWeekWindowForDate(value: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) throw new Error('start must be a YYYY-MM-DD date');
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-  if (Number.isNaN(date.getTime()) || date.getUTCFullYear() !== Number(match[1]) || date.getUTCMonth() !== Number(match[2]) - 1 || date.getUTCDate() !== Number(match[3]) || date.getUTCDay() !== 0) throw new Error('start must be a valid Sunday');
-  const end = new Date(date); end.setUTCDate(date.getUTCDate() + 7);
-  return { start: pacificMidnight(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()), end: pacificMidnight(end.getUTCFullYear(), end.getUTCMonth() + 1, end.getUTCDate()) };
 }
 function fail(reply: { code: (n: number) => { send: (x: unknown) => unknown } }, error: unknown) {
   const message = error instanceof Error ? error.message : 'Unexpected error';

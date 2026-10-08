@@ -1,5 +1,8 @@
 :root { font-family: Inter, system-ui, sans-serif; }
-body { margin: 0; min-width: 320px; }
+html, body, #root { min-height: 100%; }
+body { margin: 0; min-width: 320px; overflow-y: auto; touch-action: pan-y; }
+button, [role="button"] { touch-action: manipulation; }
+.app-shell-main { min-height: 100dvh; }
 .dashboard-container { max-width: none; padding-inline: var(--mantine-spacing-sm); }
 .dashboard-header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--mantine-spacing-md); }
 .dashboard-heading { min-width: 0; }
