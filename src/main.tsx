@@ -13,6 +13,7 @@ import {
   Checkbox,
   ColorInput,
   Container,
+  Divider,
   Group,
   Loader,
   MantineProvider,
@@ -50,8 +51,10 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   IconArrowsHorizontal,
   IconCalendarMonth,
+  IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
+  IconChevronUp,
   IconCloud,
   IconCloudFog,
   IconCloudRain,
@@ -82,6 +85,9 @@ type Event = {
 };
 type Item = { id: number; text: string; completed: boolean };
 type List = { id: number; name: string; color: string; items: Item[] };
+type Meal = { id: number; date: string; mealType: "breakfast" | "lunch" | "dinner"; name: string; notes: string };
+type RequestedMeal = { id: number; name: string; createdAt: string };
+type MealPlan = { weekStart: string; meals: Meal[]; history: Meal[]; requestedMeals: RequestedMeal[] };
 type Calendar = {
   id: number;
   externalId: string;
@@ -97,7 +103,7 @@ type Source = {
   lastError?: string;
   calendars: Calendar[];
 };
-type Layout = Record<string, { order: number; span: number }>;
+type Layout = Record<string, { order: number; span: number; collapsed?: boolean }>;
 type DashboardTile = {
   key: string;
   title: string;
@@ -635,14 +641,18 @@ function ResizeGrip({
 const DashboardTileCard = memo(function DashboardTileCard({
   tile,
   span,
+  collapsed,
   editing,
   onResize,
+  onToggleCollapsed,
   dragProps,
 }: {
   tile: DashboardTile;
   span: number;
+  collapsed: boolean;
   editing: boolean;
   onResize: (span: number) => void;
+  onToggleCollapsed: (collapsed: boolean) => void;
   dragProps?: {
     attributes: object;
     listeners: object | undefined;
@@ -672,7 +682,7 @@ const DashboardTileCard = memo(function DashboardTileCard({
       }}
       withBorder
     >
-      <Group justify="space-between" mb="sm">
+      <Group justify="space-between" mb={collapsed ? 0 : "sm"}>
         <Group gap="xs">
           {tile.color && (
             <Box className="event-dot" style={{ background: tile.color }} />
@@ -681,6 +691,14 @@ const DashboardTileCard = memo(function DashboardTileCard({
         </Group>
         <Group gap="xs">
           {tile.actions}
+          <ActionIcon
+            variant="subtle"
+            onClick={() => onToggleCollapsed(!collapsed)}
+            aria-label={`${collapsed ? "Expand" : "Collapse"} ${tile.title} widget`}
+            title={collapsed ? `Expand ${tile.title}` : `Collapse ${tile.title}`}
+          >
+            {collapsed ? <IconChevronDown size={18} /> : <IconChevronUp size={18} />}
+          </ActionIcon>
           {editing && (
             <Group gap={2}>
               <ActionIcon
@@ -699,7 +717,7 @@ const DashboardTileCard = memo(function DashboardTileCard({
           )}
         </Group>
       </Group>
-      <Stack gap="xs">{tile.content}</Stack>
+      {!collapsed && <Stack gap="xs">{tile.content}</Stack>}
     </Card>
   );
 });
@@ -707,13 +725,17 @@ const DashboardTileCard = memo(function DashboardTileCard({
 function SortableDashboardTile({
   tile,
   span,
+  collapsed,
   editing,
   onResize,
+  onToggleCollapsed,
 }: {
   tile: DashboardTile;
   span: number;
+  collapsed: boolean;
   editing: boolean;
   onResize: (span: number) => void;
+  onToggleCollapsed: (collapsed: boolean) => void;
 }) {
   const {
     attributes,
@@ -727,8 +749,10 @@ function SortableDashboardTile({
     <DashboardTileCard
       tile={tile}
       span={span}
+      collapsed={collapsed}
       editing={editing}
       onResize={onResize}
+      onToggleCollapsed={onToggleCollapsed}
       dragProps={{
         attributes,
         listeners,
@@ -783,6 +807,13 @@ function Dashboard({
     "/weather",
     refreshMinutes,
     true,
+  );
+  const mealPlanWeekStart = currentPacificWeek(true)[0]
+    .toISOString()
+    .slice(0, 10);
+  const { data: mealPlan } = useRequest<MealPlan>(
+    `/meals?weekStart=${mealPlanWeekStart}`,
+    refreshMinutes,
   );
   const [editing, setEditing] = useState(false);
   const sensors = useSensors(
@@ -898,6 +929,42 @@ function Dashboard({
           <Empty>No upcoming events in the next three days.</Empty>
         ),
       },
+      {
+        key: "meal-plan",
+        title: "Meal plan",
+        content: mealPlan ? (
+          <Stack gap="xs">
+            {Array.from({ length: 7 }, (_, index) => {
+              const date = new Date(`${mealPlan.weekStart}T00:00:00Z`);
+              date.setUTCDate(date.getUTCDate() + index);
+              const dateKey = date.toISOString().slice(0, 10);
+              const dinner = mealPlan.meals.find(
+                (meal) => meal.date === dateKey && meal.mealType === "dinner",
+              );
+              return (
+                <Box key={dateKey}>
+                  <Group justify="space-between" wrap="nowrap">
+                    <Text size="sm" fw={600}>
+                      {date.toLocaleDateString(undefined, {
+                        timeZone: "UTC",
+                        weekday: "long",
+                      })}
+                    </Text>
+                    <Text size="sm" c={dinner ? undefined : "dimmed"} truncate>
+                      {dinner?.name ?? "No dinner planned"}
+                    </Text>
+                  </Group>
+                  {index < 6 && <Divider my="xs" />}
+                </Box>
+              );
+            })}
+          </Stack>
+        ) : (
+          <Text size="sm" c="dimmed">
+            Loading meal plan…
+          </Text>
+        ),
+      },
       ...(data?.lists ?? []).map((list) => ({
         key: `list-${list.id}`,
         title: list.name,
@@ -927,6 +994,7 @@ function Dashboard({
       weekStartKey,
       currentWeekStartKey,
       weekStartsMonday,
+      mealPlan,
     ],
   );
   const ordered = [...tiles].sort(
@@ -950,6 +1018,7 @@ function Dashboard({
         order:
           layout[key]?.order ?? ordered.findIndex((tile) => tile.key === key),
         span,
+        collapsed: layout[key]?.collapsed ?? false,
       },
     };
     persistLayout(next);
@@ -967,8 +1036,24 @@ function Dashboard({
       next[tile.key] = {
         order: index,
         span: tile.key === "week" ? 2 : (layout[tile.key]?.span ?? 1),
+        collapsed: layout[tile.key]?.collapsed ?? false,
       };
     });
+    persistLayout(next);
+  };
+  const saveCollapsed = (key: string, collapsed: boolean) => {
+    const next = {
+      ...layout,
+      [key]: {
+        order:
+          layout[key]?.order ?? ordered.findIndex((tile) => tile.key === key),
+        span:
+          key === "week"
+            ? 2
+            : (layout[key]?.span ?? (key === "weather-week" ? 2 : 1)),
+        collapsed,
+      },
+    };
     persistLayout(next);
   };
   const noopResize = useCallback(() => undefined, []);
@@ -983,21 +1068,28 @@ function Dashboard({
         const onResize = editing
           ? (nextSpan: number) => saveSpan(tile.key, nextSpan)
           : noopResize;
+        const collapsed = Boolean(layout[tile.key]?.collapsed);
+        const onToggleCollapsed = (nextCollapsed: boolean) =>
+          saveCollapsed(tile.key, nextCollapsed);
         return editing ? (
           <SortableDashboardTile
             key={tile.key}
             tile={tile}
             span={span}
+            collapsed={collapsed}
             editing={editing}
             onResize={onResize}
+            onToggleCollapsed={onToggleCollapsed}
           />
         ) : (
           <DashboardTileCard
             key={tile.key}
             tile={tile}
             span={span}
+            collapsed={collapsed}
             editing={editing}
             onResize={onResize}
+            onToggleCollapsed={onToggleCollapsed}
           />
         );
       })}
@@ -1320,6 +1412,123 @@ function ListsPage() {
           </Card>
         ))}
       </SimpleGrid>
+    </Stack>
+  );
+}
+
+const mealTypeLabels: Record<Meal["mealType"], string> = {
+  breakfast: "Breakfast",
+  lunch: "Lunch",
+  dinner: "Dinner",
+};
+const plannedMealTypes: Meal["mealType"][] = ["dinner"];
+const mealWeekStart = () => currentPacificWeek(true)[0].toISOString().slice(0, 10);
+const mealDayLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString(undefined, { timeZone: "UTC", weekday: "long", month: "short", day: "numeric" });
+
+function MealsPage({ refreshMinutes }: { refreshMinutes: number }) {
+  const weekStart = mealWeekStart();
+  const { data, loading, reload } = useRequest<MealPlan>(`/meals?weekStart=${weekStart}`, refreshMinutes);
+  const [requestedMeal, setRequestedMeal] = useState("");
+  const [planningMeal, setPlanningMeal] = useState<string | null>(null);
+  const [planningDate, setPlanningDate] = useState(weekStart);
+  const change = async (action: () => Promise<unknown>) => {
+    try { await action(); await reload(false); }
+    catch (error) { notifications.show({ color: "red", message: error instanceof Error ? error.message : "Could not save meal" }); }
+  };
+  if (loading && !data) return <Loader />;
+  const meals = data?.meals ?? [];
+  const mealFor = (date: string, mealType: Meal["mealType"]) => meals.find((meal) => meal.date === date && meal.mealType === mealType);
+  const dates = Array.from({ length: 7 }, (_, index) => { const date = new Date(`${weekStart}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + index); return date.toISOString().slice(0, 10); });
+  const openPlanDialog = (name: string) => {
+    setPlanningMeal(name);
+    setPlanningDate(dates.find((date) => !mealFor(date, "dinner")) ?? dates[0]);
+  };
+  const addToPlan = async () => {
+    if (!planningMeal) return;
+    if (mealFor(planningDate, "dinner")) {
+      notifications.show({ color: "yellow", message: `${mealDayLabel(planningDate)} already has a dinner planned` });
+      return;
+    }
+    await change(() => api("/meals", { method: "POST", body: JSON.stringify({ date: planningDate, mealType: "dinner", name: planningMeal }) }));
+    setPlanningMeal(null);
+  };
+  return (
+    <Stack gap="xl">
+      <Box>
+        <Title order={1}>Meal planning</Title>
+        <Text c="dimmed">Plan this week’s meals and keep good ideas close at hand.</Text>
+      </Box>
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
+        {dates.map((date) => (
+          <Card key={date} withBorder>
+            <Title order={3} mb="sm">{mealDayLabel(date)}</Title>
+            <Stack gap="sm">
+              {plannedMealTypes.map((mealType) => {
+                const meal = mealFor(date, mealType);
+                return <Group key={mealType} align="end" wrap="nowrap">
+                  <TextInput
+                    key={`${date}-${mealType}-${meal?.id ?? "empty"}`}
+                    label={mealTypeLabels[mealType]}
+                    placeholder="Add a meal"
+                    defaultValue={meal?.name ?? ""}
+                    className="item-input"
+                    onBlur={(event) => {
+                      const name = event.currentTarget.value.trim();
+                      if (!name && meal) void change(() => api(`/meals/${meal.id}`, { method: "DELETE" }));
+                      else if (name && meal && name !== meal.name) void change(() => api(`/meals/${meal.id}`, { method: "PATCH", body: JSON.stringify({ name }) }));
+                      else if (name && !meal) void change(() => api("/meals", { method: "POST", body: JSON.stringify({ date, mealType, name }) }));
+                    }}
+                  />
+                  {meal && <ActionIcon color="red" variant="subtle" aria-label={`Remove ${meal.name}`} onClick={() => void change(() => api(`/meals/${meal.id}`, { method: "DELETE" }))}><IconX size={17} /></ActionIcon>}
+                </Group>;
+              })}
+            </Stack>
+          </Card>
+        ))}
+      </SimpleGrid>
+      <SimpleGrid cols={{ base: 1, md: 2 }}>
+        <Card withBorder>
+          <Title order={3} mb="sm">Requested meals</Title>
+          <Group align="end" mb="md">
+            <TextInput label="What should we make?" placeholder="Tacos, soup, pizza…" value={requestedMeal} onChange={(event) => setRequestedMeal(event.currentTarget.value)} className="item-input" onKeyDown={(event) => { if (event.key === "Enter" && requestedMeal.trim()) { void change(async () => { await api("/requested-meals", { method: "POST", body: JSON.stringify({ name: requestedMeal }) }); setRequestedMeal(""); }); } }} />
+            <Button onClick={() => { if (requestedMeal.trim()) void change(async () => { await api("/requested-meals", { method: "POST", body: JSON.stringify({ name: requestedMeal }) }); setRequestedMeal(""); }); }}>Add</Button>
+          </Group>
+          <Stack gap="xs">
+            {(data?.requestedMeals ?? []).map((meal) => <Group key={meal.id} wrap="nowrap">
+              <TextInput className="item-input" defaultValue={meal.name} onBlur={(event) => { const name = event.currentTarget.value.trim(); if (name && name !== meal.name) void change(() => api(`/requested-meals/${meal.id}`, { method: "PATCH", body: JSON.stringify({ name }) })); }} />
+              <Button variant="light" size="compact-sm" onClick={() => openPlanDialog(meal.name)}>Plan</Button>
+              <ActionIcon color="red" variant="subtle" aria-label={`Remove ${meal.name}`} onClick={() => void change(() => api(`/requested-meals/${meal.id}`, { method: "DELETE" }))}><IconX size={17} /></ActionIcon>
+            </Group>)}
+            {!data?.requestedMeals.length && <Empty>No requested meals yet.</Empty>}
+          </Stack>
+        </Card>
+        <Card withBorder>
+          <Title order={3} mb="sm">Past meals</Title>
+          <Text size="sm" c="dimmed" mb="md">Reuse a favorite meal by choosing its day this week.</Text>
+          <Stack gap="xs">
+            {(data?.history ?? []).map((meal) => <Group key={meal.id} justify="space-between" wrap="nowrap">
+              <Box><Text size="sm">{meal.name}</Text><Text size="xs" c="dimmed">{mealDayLabel(meal.date)} · {mealTypeLabels[meal.mealType]}</Text></Box>
+              <Button variant="light" size="compact-sm" onClick={() => openPlanDialog(meal.name)}>Plan</Button>
+            </Group>)}
+            {!data?.history.length && <Empty>Past meals will appear here as you plan them.</Empty>}
+          </Stack>
+        </Card>
+      </SimpleGrid>
+      <Modal opened={planningMeal !== null} onClose={() => setPlanningMeal(null)} title="Add meal to this week">
+        <Stack>
+          <Text>{planningMeal}</Text>
+          <Select
+            label="Day"
+            value={planningDate}
+            onChange={(value) => { if (value) setPlanningDate(value); }}
+            data={dates.map((date) => ({ value: date, label: mealDayLabel(date), disabled: Boolean(mealFor(date, "dinner")) }))}
+          />
+          <Group justify="end">
+            <Button variant="default" onClick={() => setPlanningMeal(null)}>Cancel</Button>
+            <Button onClick={() => void addToPlan()}>Add to plan</Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }
@@ -1722,7 +1931,7 @@ function App() {
       method: "PATCH",
       body: JSON.stringify({ layout }),
     });
-    await reload();
+    await reload(false);
   };
   const toggleTheme = async () => {
     await api("/settings", {
@@ -1770,6 +1979,7 @@ function App() {
         onOpenEvent={setSelectedEvent}
       />
     ),
+    meals: <MealsPage refreshMinutes={settings.screenRefreshMinutes} />,
     lists: <ListsPage />,
     admin: (
       <Stack gap="xl">
@@ -1786,6 +1996,7 @@ function App() {
   const navigation = [
     { key: "dashboard", label: "Dashboard", icon: IconLayoutDashboard },
     { key: "calendar", label: "Calendar", icon: IconCalendarMonth },
+    { key: "meals", label: "Meals", icon: IconListCheck },
     { key: "lists", label: "Shared lists", icon: IconListCheck },
     { key: "admin", label: "Settings", icon: IconSettings },
   ];

@@ -44,6 +44,14 @@ db.exec(`
     id INTEGER PRIMARY KEY, list_id INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
     text TEXT NOT NULL, completed INTEGER NOT NULL DEFAULT 0, completed_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+  CREATE TABLE IF NOT EXISTS meals (
+    id INTEGER PRIMARY KEY, meal_date TEXT NOT NULL, meal_type TEXT NOT NULL CHECK(meal_type IN ('breakfast','lunch','dinner')),
+    name TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(meal_date, meal_type)
+  );
+  CREATE TABLE IF NOT EXISTS requested_meals (
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
   CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `);
 const eventColumns = new Set((db.prepare('PRAGMA table_info(events)').all() as Array<{ name: string }>).map(column => column.name));
@@ -240,6 +248,42 @@ app.delete('/api/lists/:id', async (request, reply) => { try { const result = db
 app.post('/api/lists/:id/items', async (request, reply) => { try { const result = db.prepare('INSERT INTO list_items(list_id,text) VALUES(?,?)').run(id((request.params as Row).id), requiredText(asObject(request.body).text, 'Item text')); return reply.code(201).send({ id: result.lastInsertRowid }); } catch (error) { return fail(reply, error); } });
 app.patch('/api/items/:id', async (request, reply) => { try { const body = asObject(request.body); const completed = typeof body.completed === 'boolean' ? Number(body.completed) : null; const result = db.prepare('UPDATE list_items SET text=COALESCE(?,text),completed=COALESCE(?,completed),completed_at=CASE WHEN ?=1 THEN CURRENT_TIMESTAMP WHEN ?=0 THEN NULL ELSE completed_at END WHERE id=?').run(typeof body.text === 'string' ? requiredText(body.text, 'Item text') : null, completed, completed, completed, id((request.params as Row).id)); if (!result.changes) throw new Error('Invalid id'); return { ok: true }; } catch (error) { return fail(reply, error); } });
 app.delete('/api/items/:id', async (request, reply) => { try { const result = db.prepare('DELETE FROM list_items WHERE id=?').run(id((request.params as Row).id)); if (!result.changes) throw new Error('Invalid id'); return reply.code(204).send(); } catch (error) { return fail(reply, error); } });
+const mealTypes = ['breakfast', 'lunch', 'dinner'] as const;
+function mealType(value: unknown) {
+  if (typeof value !== 'string' || !mealTypes.includes(value as typeof mealTypes[number])) throw new Error('Meal type must be breakfast, lunch, or dinner');
+  return value;
+}
+function mealDate(value: unknown) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(new Date(`${value}T00:00:00Z`).getTime())) throw new Error('Meal date must be YYYY-MM-DD');
+  return value;
+}
+function mealRows(sql: string, ...params: unknown[]) {
+  return db.prepare(sql).all(...params).map((meal: any) => ({ ...meal, mealType: meal.mealType ?? meal.meal_type }));
+}
+app.get('/api/meals', async (request, reply) => { try {
+  const weekStart = mealDate((request.query as Row).weekStart);
+  const start = new Date(`${weekStart}T00:00:00Z`); start.setUTCDate(start.getUTCDate() + 7);
+  const weekEnd = start.toISOString().slice(0, 10);
+  return {
+    weekStart,
+    meals: mealRows('SELECT id, meal_date AS date, meal_type AS mealType, name, notes FROM meals WHERE meal_date >= ? AND meal_date < ? ORDER BY meal_date, CASE meal_type WHEN \'breakfast\' THEN 1 WHEN \'lunch\' THEN 2 ELSE 3 END', weekStart, weekEnd),
+    history: mealRows('SELECT id, meal_date AS date, meal_type AS mealType, name, notes FROM meals WHERE meal_date < ? ORDER BY meal_date DESC, id DESC LIMIT 100', weekStart),
+    requestedMeals: db.prepare('SELECT id, name, created_at AS createdAt FROM requested_meals ORDER BY created_at DESC, id DESC').all(),
+  };
+} catch (error) { return fail(reply, error); } });
+app.post('/api/meals', async (request, reply) => { try {
+  const body = asObject(request.body); const date = mealDate(body.date); const type = mealType(body.mealType); const name = requiredText(body.name, 'Meal name');
+  const result = db.prepare('INSERT INTO meals(meal_date,meal_type,name,notes) VALUES(?,?,?,?)').run(date, type, name, typeof body.notes === 'string' ? body.notes.trim() : '');
+  return reply.code(201).send({ id: result.lastInsertRowid });
+} catch (error) { return fail(reply, error); } });
+app.patch('/api/meals/:id', async (request, reply) => { try {
+  const body = asObject(request.body); const result = db.prepare('UPDATE meals SET name=COALESCE(?,name), notes=COALESCE(?,notes) WHERE id=?').run(typeof body.name === 'string' ? requiredText(body.name, 'Meal name') : null, typeof body.notes === 'string' ? body.notes.trim() : null, id((request.params as Row).id));
+  if (!result.changes) throw new Error('Invalid id'); return { ok: true };
+} catch (error) { return fail(reply, error); } });
+app.delete('/api/meals/:id', async (request, reply) => { try { const result = db.prepare('DELETE FROM meals WHERE id=?').run(id((request.params as Row).id)); if (!result.changes) throw new Error('Invalid id'); return reply.code(204).send(); } catch (error) { return fail(reply, error); } });
+app.post('/api/requested-meals', async (request, reply) => { try { const result = db.prepare('INSERT INTO requested_meals(name) VALUES(?)').run(requiredText(asObject(request.body).name, 'Requested meal')); return reply.code(201).send({ id: result.lastInsertRowid }); } catch (error) { return fail(reply, error); } });
+app.patch('/api/requested-meals/:id', async (request, reply) => { try { const result = db.prepare('UPDATE requested_meals SET name=? WHERE id=?').run(requiredText(asObject(request.body).name, 'Requested meal'), id((request.params as Row).id)); if (!result.changes) throw new Error('Invalid id'); return { ok: true }; } catch (error) { return fail(reply, error); } });
+app.delete('/api/requested-meals/:id', async (request, reply) => { try { const result = db.prepare('DELETE FROM requested_meals WHERE id=?').run(id((request.params as Row).id)); if (!result.changes) throw new Error('Invalid id'); return reply.code(204).send(); } catch (error) { return fail(reply, error); } });
 app.get('/api/events', async (request, reply) => { try { const query = request.query as Row; const from = requiredText(query.from, 'from'); const to = requiredText(query.to, 'to'); return eventRows(from, to); } catch (error) { return fail(reply, error); } });
 app.get('/api/weeks', async (request, reply) => { try { const window = pacificWeekWindowForDate(requiredText((request.query as Row).start, 'start')); return eventRows(window.start.toISOString(), window.end.toISOString()); } catch (error) { return fail(reply, error); } });
 app.get('/api/dashboard', async () => { const now = new Date(); const today = pacificDateKey(now); const todayParts = pacificParts(now); const weekWindow = pacificWeekWindow(now); const week = eventRows(weekWindow.start.toISOString(), weekWindow.end.toISOString()); const nearbyEvents = eventRows(new Date(now.getTime() - 2 * 864e5).toISOString(), new Date(now.getTime() + 9 * 864e5).toISOString()); const threeDaysAfter = new Date(Date.UTC(todayParts.year, todayParts.month - 1, todayParts.day + 4)); const upcomingEnd = pacificDateKey(pacificMidnight(threeDaysAfter.getUTCFullYear(), threeDaysAfter.getUTCMonth() + 1, threeDaysAfter.getUTCDate())); const lists = await app.inject({ method: 'GET', url: '/api/lists' }); return { today: nearbyEvents.filter(event => pacificDateKey(event.startAt) === today), upcoming: nearbyEvents.filter(event => { const eventDay = pacificDateKey(event.startAt); return eventDay > today && eventDay < upcomingEnd; }).slice(0, 5), week, lists: JSON.parse(lists.body), lastSyncAt: (db.prepare('SELECT MAX(last_sync_at) AS value FROM sources').get() as any).value, hasSyncError: Boolean((db.prepare('SELECT COUNT(*) AS count FROM sources WHERE last_error IS NOT NULL').get() as any).count) }; });
