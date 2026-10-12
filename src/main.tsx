@@ -903,7 +903,7 @@ function Dashboard({
         title: list.name,
         color: list.color,
         content: list.items.length ? (
-          list.items.slice(0, 6).map((item) => (
+          list.items.map((item) => (
             <Text
               key={item.id}
               size="sm"
@@ -1190,7 +1190,7 @@ function ListsPage() {
   const change = async (action: () => Promise<unknown>) => {
     try {
       await action();
-      await reload();
+      await reload(false);
     } catch (error) {
       notifications.show({
         color: "red",
