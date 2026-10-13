@@ -69,6 +69,7 @@ import {
   IconSettings,
   IconSun,
   IconSunHigh,
+  IconToolsKitchen2,
   IconTrash,
   IconX,
 } from "@tabler/icons-react";
@@ -256,6 +257,72 @@ function usePacificNow() {
     };
   }, []);
   return now;
+}
+function useKeyboardAwareFocus() {
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    let focusedElement: HTMLElement | null = null;
+    let keyboardOpen = false;
+    let scrollScheduled = false;
+    let scrollCompleted = false;
+
+    const isEditable = (element: Element | null): element is HTMLElement =>
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement ||
+      element instanceof HTMLSelectElement ||
+      element instanceof HTMLElement && element.isContentEditable;
+
+    const scrollFocusedElement = () => {
+      scrollScheduled = false;
+      if (!keyboardOpen || scrollCompleted || !focusedElement || !document.body.contains(focusedElement)) return;
+      if (document.activeElement !== focusedElement) return;
+      focusedElement.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+      scrollCompleted = true;
+    };
+
+    const scheduleScroll = () => {
+      if (scrollScheduled) return;
+      scrollScheduled = true;
+      window.setTimeout(scrollFocusedElement, 100);
+    };
+
+    const updateKeyboardState = () => {
+      const viewportHeight = viewport?.height ?? window.innerHeight;
+      const keyboardHeight = window.innerHeight - viewportHeight;
+      const nextKeyboardOpen = keyboardHeight > 120;
+      if (!nextKeyboardOpen) {
+        keyboardOpen = false;
+        scrollCompleted = false;
+        return;
+      }
+      if (!keyboardOpen) scrollCompleted = false;
+      keyboardOpen = true;
+      scheduleScroll();
+    };
+
+    const onFocusIn = (event: FocusEvent) => {
+      if (!isEditable(event.target as Element | null)) return;
+      focusedElement = event.target as HTMLElement;
+      scrollCompleted = false;
+      updateKeyboardState();
+    };
+    const onFocusOut = () => {
+      window.setTimeout(() => {
+        if (!isEditable(document.activeElement)) focusedElement = null;
+      }, 0);
+    };
+
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("focusout", onFocusOut);
+    window.addEventListener("resize", updateKeyboardState);
+    viewport?.addEventListener("resize", updateKeyboardState);
+    return () => {
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
+      window.removeEventListener("resize", updateKeyboardState);
+      viewport?.removeEventListener("resize", updateKeyboardState);
+    };
+  }, []);
 }
 function pacificHour(value: Date) {
   return Number(
@@ -545,6 +612,21 @@ function currentPacificWeek(weekStartsMonday = false) {
     (_, index) => new Date(sunday.getTime() + index * 864e5),
   );
 }
+const weekStartsMondayStorageKey = "family-skylight.week-starts-monday";
+function storedWeekStartsMonday() {
+  try {
+    return window.localStorage.getItem(weekStartsMondayStorageKey) === "true";
+  } catch {
+    return false;
+  }
+}
+function saveWeekStartsMonday(value: boolean) {
+  try {
+    window.localStorage.setItem(weekStartsMondayStorageKey, String(value));
+  } catch {
+    // A restricted browser storage context should not prevent the dashboard working.
+  }
+}
 const WeekPanel = memo(function WeekPanel({
   events,
   weekStart,
@@ -793,8 +875,10 @@ function Dashboard({
         : "afternoon";
   const season = seasonalAccent(now);
   const fullMoon = isFullMoon(now);
-  const [weekStart, setWeekStart] = useState(() => currentPacificWeek()[0]);
-  const [weekStartsMonday, setWeekStartsMonday] = useState(false);
+  const [weekStartsMonday, setWeekStartsMonday] = useState(storedWeekStartsMonday);
+  const [weekStart, setWeekStart] = useState(
+    () => currentPacificWeek(storedWeekStartsMonday())[0],
+  );
   const weekStartKey = pacificIsoDate(weekStart);
   const currentWeekStartKey = pacificIsoDate(
     currentPacificWeek(weekStartsMonday)[0],
@@ -862,6 +946,7 @@ function Dashboard({
               onChange={(event) => {
                 const startsMonday = event.currentTarget.checked;
                 setWeekStartsMonday(startsMonday);
+                saveWeekStartsMonday(startsMonday);
                 setWeekStart((start) =>
                   new Date(start.getTime() + (startsMonday ? 1 : -1) * 864e5),
                 );
@@ -1921,6 +2006,7 @@ function ThemeSettings({
 }
 
 function App() {
+  useKeyboardAwareFocus();
   const { data: settings, loading, reload } = useRequest<Settings>("/settings");
   const [page, setPage] = useState("dashboard");
   const [menuCollapsed, setMenuCollapsed] = useState(false);
@@ -1996,7 +2082,7 @@ function App() {
   const navigation = [
     { key: "dashboard", label: "Dashboard", icon: IconLayoutDashboard },
     { key: "calendar", label: "Calendar", icon: IconCalendarMonth },
-    { key: "meals", label: "Meals", icon: IconListCheck },
+    { key: "meals", label: "Meals", icon: IconToolsKitchen2 },
     { key: "lists", label: "Shared lists", icon: IconListCheck },
     { key: "admin", label: "Settings", icon: IconSettings },
   ];
@@ -2100,7 +2186,7 @@ function App() {
         </AppShell.Navbar>
         <AppShell.Main className="app-shell-main">
           <Container
-            className={page === "dashboard" ? "dashboard-container" : undefined}
+            className={`${page === "dashboard" ? "dashboard-container" : ""} app-page-content`}
             size={page === "dashboard" ? "100%" : "xl"}
             py="md"
           >
