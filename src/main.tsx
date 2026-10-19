@@ -104,7 +104,13 @@ type Source = {
   lastError?: string;
   calendars: Calendar[];
 };
-type Layout = Record<string, { order: number; span: number; collapsed?: boolean }>;
+type Layout = Record<string, {
+  order: number;
+  span: number;
+  collapsed?: boolean;
+  hidden?: boolean;
+  listIds?: number[];
+}>;
 type DashboardTile = {
   key: string;
   title: string;
@@ -563,35 +569,6 @@ function WeatherToday({ weather }: { weather: WeatherResponse | undefined }) {
     </Group>
   );
 }
-function WeatherWeek({ weather }: { weather: WeatherForecast }) {
-  return (
-    <div className="weather-week">
-      {weather.daily.map((day) => {
-        const { Icon, label } = weatherCondition(day.weatherCode);
-        return (
-          <Stack key={day.date} className="weather-day" gap={2} align="center">
-            <Text size="xs" fw={700}>
-              {new Date(`${day.date}T12:00:00Z`).toLocaleDateString(undefined, {
-                timeZone: "UTC",
-                weekday: "short",
-              })}
-            </Text>
-            <Icon size={30} stroke={1.6} aria-label={label} />
-            <Text size="xs" fw={600}>
-              {fahrenheit(day.high)}
-            </Text>
-            <Text size="xs" c="dimmed">
-              {fahrenheit(day.low)}
-            </Text>
-            <Text size="xs" c="dimmed">
-              {day.precipitationChance}%
-            </Text>
-          </Stack>
-        );
-      })}
-    </div>
-  );
-}
 function currentPacificWeek(weekStartsMonday = false) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles",
@@ -630,9 +607,13 @@ function saveWeekStartsMonday(value: boolean) {
 const WeekPanel = memo(function WeekPanel({
   events,
   weekStart,
+  weather,
+  todayKey,
   onOpenEvent,
 }: {
   events: Event[];
+  weather: WeatherResponse | undefined;
+  todayKey: string;
   weekStart: Date;
   onOpenEvent: (event: Event) => void;
 }) {
@@ -643,15 +624,27 @@ const WeekPanel = memo(function WeekPanel({
   return (
     <div className="week-panel">
       {days.map((day) => {
-        const dayKey = pacificDateKey(day);
+        const dayKey = pacificIsoDate(day);
+        const forecast = weather?.configured && dayKey >= todayKey
+          ? weather.daily.find((entry) => entry.date === dayKey)
+          : undefined;
+        const condition = forecast ? weatherCondition(forecast.weatherCode) : undefined;
         const dayEvents = events.filter((event) =>
           occursOnPacificDay(event, day),
         );
         return (
           <Box
             key={dayKey}
-            className={`week-day ${dayKey === pacificDateKey(new Date()) ? "week-day-today" : ""}`}
+            className={`week-day ${dayKey === todayKey ? "week-day-today" : ""}`}
           >
+            <Stack className="week-day-forecast" gap={3} mb="sm">
+              {forecast && condition && <>
+                <condition.Icon size={28} stroke={1.6} aria-label={condition.label} />
+                <Text size="xs">{condition.label}</Text>
+                <Text size="xs" fw={600}>High {fahrenheit(forecast.high)} · Low {fahrenheit(forecast.low)}</Text>
+                <Text size="xs" c="dimmed">{forecast.precipitationChance}% precipitation</Text>
+              </>}
+            </Stack>
             <Text size="xs" fw={700} tt="uppercase">
               {day.toLocaleDateString(undefined, {
                 timeZone: "UTC",
@@ -900,6 +893,28 @@ function Dashboard({
     refreshMinutes,
   );
   const [editing, setEditing] = useState(false);
+  const [panelDraft, setPanelDraft] = useState<Layout | null>(null);
+  const [savingPanels, setSavingPanels] = useState(false);
+  const todayKey = pacificIsoDate(now);
+  const isPanelVisible = (key: string, settings: Layout) =>
+    !(settings[key]?.hidden ?? (key.startsWith("list-") && !settings[key]));
+  const updatePanelDraft = (key: string, patch: Partial<Layout[string]>) =>
+    setPanelDraft((draft) => draft && ({
+      ...draft,
+      [key]: { ...draft[key], order: draft[key]?.order ?? 99, span: draft[key]?.span ?? (key === "week" ? 2 : 1), ...patch },
+    }));
+  const commitPanelDraft = async () => {
+    if (!panelDraft) return;
+    setSavingPanels(true);
+    try {
+      await saveLayout(panelDraft);
+      setPanelDraft(null);
+    } catch (error) {
+      notifications.show({ color: "red", message: error instanceof Error ? error.message : "Could not save panels" });
+    } finally {
+      setSavingPanels(false);
+    }
+  };
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, {
@@ -956,11 +971,22 @@ function Dashboard({
           </Group>
         ),
         content: (
-          <WeekPanel
-            events={weekEvents}
-            weekStart={weekStart}
-            onOpenEvent={onOpenEvent}
-          />
+          <>
+            <WeekPanel
+              events={weekEvents}
+              weekStart={weekStart}
+              weather={weather}
+              todayKey={todayKey}
+              onOpenEvent={onOpenEvent}
+            />
+            {weather?.configured ? (
+              <Text size="xs" c="dimmed">
+                {weather.location.name}{weather.stale ? " · Showing saved forecast" : ""} · <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather data by Open-Meteo.com</a>
+              </Text>
+            ) : (
+              <Text size="xs" c="dimmed">{weather ? "Set a weather location in Administration to show forecasts." : "Weather forecast unavailable or loading…"}</Text>
+            )}
+          </>
         ),
       },
       {
@@ -979,28 +1005,6 @@ function Dashboard({
           </>
         ),
       },
-      ...(weather?.configured
-        ? [
-            {
-              key: "weather-week",
-              title: "Weekly forecast",
-              content: (
-                <>
-                  <WeatherWeek weather={weather} />
-                  <Text
-                    component="a"
-                    href="https://open-meteo.com/"
-                    target="_blank"
-                    size="xs"
-                    c="dimmed"
-                  >
-                    Weather data by Open-Meteo.com
-                  </Text>
-                </>
-              ),
-            },
-          ]
-        : []),
       {
         key: "upcoming",
         title: "Coming up",
@@ -1050,6 +1054,28 @@ function Dashboard({
           </Text>
         ),
       },
+      {
+        key: "combined-lists",
+        title: "Lists",
+        actions: <Button variant="subtle" size="compact-sm" onClick={() => setPanelDraft(layout)}>Choose lists</Button>,
+        content: (() => {
+          const selectedIds = layout["combined-lists"]?.listIds;
+          const selected = (data?.lists ?? []).filter((list) =>
+            selectedIds === undefined || selectedIds.includes(list.id),
+          );
+          return selected.length ? selected.map((list) => (
+            <Box key={list.id} className="combined-list-group">
+              <Group gap="xs" mb="xs">
+                <Box className="event-dot" style={{ background: list.color }} />
+                <Title order={4}>{list.name}</Title>
+              </Group>
+              {list.items.length ? list.items.map((item) => (
+                <Text key={item.id} size="sm" td={item.completed ? "line-through" : undefined} c={item.completed ? "dimmed" : undefined}>• {item.text}</Text>
+              )) : <Empty>No items yet.</Empty>}
+            </Box>
+          )) : <Empty>Choose lists to display here. Create new lists on the Lists page.</Empty>;
+        })(),
+      },
       ...(data?.lists ?? []).map((list) => ({
         key: `list-${list.id}`,
         title: list.name,
@@ -1080,9 +1106,11 @@ function Dashboard({
       currentWeekStartKey,
       weekStartsMonday,
       mealPlan,
+      layout,
+      todayKey,
     ],
   );
-  const ordered = [...tiles].sort(
+  const ordered = tiles.filter((tile) => isPanelVisible(tile.key, layout)).sort(
     (a, b) => (layout[a.key]?.order ?? 99) - (layout[b.key]?.order ?? 99),
   );
   const persistLayout = (next: Layout) => {
@@ -1100,6 +1128,7 @@ function Dashboard({
     const next = {
       ...layout,
       [key]: {
+        ...layout[key],
         order:
           layout[key]?.order ?? ordered.findIndex((tile) => tile.key === key),
         span,
@@ -1119,6 +1148,7 @@ function Dashboard({
     const next = { ...layout };
     reordered.forEach((tile, index) => {
       next[tile.key] = {
+        ...layout[tile.key],
         order: index,
         span: tile.key === "week" ? 2 : (layout[tile.key]?.span ?? 1),
         collapsed: layout[tile.key]?.collapsed ?? false,
@@ -1130,12 +1160,13 @@ function Dashboard({
     const next = {
       ...layout,
       [key]: {
+        ...layout[key],
         order:
           layout[key]?.order ?? ordered.findIndex((tile) => tile.key === key),
         span:
           key === "week"
             ? 2
-            : (layout[key]?.span ?? (key === "weather-week" ? 2 : 1)),
+            : (layout[key]?.span ?? 1),
         collapsed,
       },
     };
@@ -1148,8 +1179,7 @@ function Dashboard({
         const span =
           tile.key === "week"
             ? 2
-            : (layout[tile.key]?.span ??
-              (tile.key === "weather-week" ? 2 : 1));
+            : (layout[tile.key]?.span ?? 1);
         const onResize = editing
           ? (nextSpan: number) => saveSpan(tile.key, nextSpan)
           : noopResize;
@@ -1159,7 +1189,29 @@ function Dashboard({
         return editing ? (
           <SortableDashboardTile
             key={tile.key}
-            tile={tile}
+            tile={{
+              ...tile,
+              actions: <>
+                {tile.actions}
+                <ActionIcon
+                  size="lg"
+                  color="red"
+                  variant="subtle"
+                  aria-label={`Remove ${tile.title} panel`}
+                  onClick={() => persistLayout({
+                    ...layout,
+                    [tile.key]: {
+                      ...layout[tile.key],
+                      order: layout[tile.key]?.order ?? 99,
+                      span,
+                      hidden: true,
+                    },
+                  })}
+                >
+                  <IconX size={20} />
+                </ActionIcon>
+              </>,
+            }}
             span={span}
             collapsed={collapsed}
             editing={editing}
@@ -1218,6 +1270,7 @@ function Dashboard({
           )}
         </Group>
         <Group className="dashboard-actions">
+          <Button variant="light" leftSection={<IconPlus size={18} />} onClick={() => setPanelDraft(layout)}>Manage panels</Button>
           <Button
             variant={editing ? "filled" : "light"}
             onClick={() => setEditing(!editing)}
@@ -1234,6 +1287,27 @@ function Dashboard({
           </ActionIcon>
         </Group>
       </div>
+      {!ordered.length && <Empty>No panels selected. Use Manage panels to add some.</Empty>}
+      <Modal opened={panelDraft !== null} onClose={() => { if (!savingPanels) setPanelDraft(null); }} title="Manage dashboard panels" centered>
+        {panelDraft && <Stack>
+          <Text size="sm" c="dimmed">Choose the panels to show on your dashboard. Removing a panel keeps its data.</Text>
+          {tiles.map((tile) => (
+            <Checkbox key={tile.key} label={tile.key === "combined-lists" ? "Combined lists" : tile.key.startsWith("list-") ? `Individual list: ${tile.title}` : tile.title} checked={isPanelVisible(tile.key, panelDraft)} disabled={savingPanels} onChange={(event) => updatePanelDraft(tile.key, { hidden: !event.currentTarget.checked })} />
+          ))}
+          <Divider label="Lists in the combined panel" />
+          {!data?.lists.length && <Text size="sm" c="dimmed">Create a list on the Lists page to get started.</Text>}
+          {(data?.lists ?? []).map((list) => (
+            <Checkbox key={list.id} label={list.name} disabled={savingPanels} checked={panelDraft["combined-lists"]?.listIds?.includes(list.id) ?? true} onChange={(event) => {
+              const ids = panelDraft["combined-lists"]?.listIds ?? (data?.lists ?? []).map((entry) => entry.id);
+              updatePanelDraft("combined-lists", { listIds: event.currentTarget.checked ? [...ids, list.id] : ids.filter((id) => id !== list.id) });
+            }} />
+          ))}
+          <Group justify="flex-end">
+            <Button variant="default" disabled={savingPanels} onClick={() => setPanelDraft(null)}>Cancel</Button>
+            <Button loading={savingPanels} onClick={() => void commitPanelDraft()}>Save panels</Button>
+          </Group>
+        </Stack>}
+      </Modal>
       {editing ? (
         <DndContext
           sensors={sensors}
