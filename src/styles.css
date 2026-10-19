@@ -45,3 +45,12 @@ input, textarea, select, [contenteditable="true"] { user-select: text; -webkit-u
 .week-day-forecast { justify-content: flex-start; }
 .week-day-forecast:not(:empty) { border-bottom: 1px solid var(--mantine-color-default-border); padding-bottom: var(--mantine-spacing-xs); }
 .combined-list-group + .combined-list-group { border-top: 1px solid var(--mantine-color-default-border); padding-top: var(--mantine-spacing-sm); }
+
+.beavers-panel { background: #151515; color: #fff; border: 2px solid #dc4405; border-top: 8px solid #dc4405; }
+.beavers-panel h2, .beavers-score { color: #ff873f; }
+.beavers-panel a { color: #ffad79; font-size: var(--mantine-font-size-xs); }
+.beavers-game + .beavers-game { border-top: 1px solid #dc4405; padding-top: var(--mantine-spacing-md); }
+.beavers-scoreboard { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--mantine-spacing-lg); }
+.beavers-team { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--mantine-spacing-xs); }
+.beavers-team img { object-fit: contain; }
+.beavers-score { font-size: 2.5rem; line-height: 1.2; }

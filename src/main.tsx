@@ -1,6 +1,7 @@
 import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
 import "./styles.css";
+import type { BeaverGame } from "./beavers";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
@@ -840,6 +841,67 @@ function SortableDashboardTile({
   );
 }
 
+function BeaversPanel() {
+  const [games, setGames] = useState<BeaverGame[]>([]);
+  useEffect(() => {
+    if (!games.length) return;
+    const expiry = Math.min(...games.map((game) => game.expiresAt));
+    const timer = window.setTimeout(() => {
+      setGames((current) => current.filter((game) => Date.now() < game.expiresAt));
+    }, Math.max(0, expiry - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [games]);
+  useEffect(() => {
+    let cancelled = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      let delay = 5 * 60_000;
+      try {
+        const result = await api<{ games: BeaverGame[]; nextCheckAt: number }>("/beavers");
+        delay = Math.max(1000, result.nextCheckAt - Date.now());
+        if (!cancelled) setGames(result.games);
+      } catch { /* This surprise panel stays quiet when sports updates are unavailable. */ }
+      if (!cancelled) timer = window.setTimeout(poll, delay);
+    };
+    void poll();
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, []);
+  const visible = games.filter((game) => Date.now() < game.expiresAt);
+  if (!visible.length) return null;
+  return (
+    <Card className="beavers-panel" padding="lg" component="section" aria-label="Oregon State Beavers game updates">
+      <Group justify="space-between" mb="md">
+        <Title order={2}>Go Beavs!</Title>
+        <Text fw={600}>Oregon State Beavers</Text>
+      </Group>
+      <Stack gap="lg">
+        {visible.map((game) => (
+          <Box key={game.id} className="beavers-game">
+            <Group justify="space-between" mb="sm">
+              <Text fw={700}>{game.sport}</Text>
+              <Badge color="orange" variant="filled">{game.completed ? "Final" : "Live"}</Badge>
+            </Group>
+            <div className="beavers-scoreboard">
+              {game.teams.map((team) => (
+                <div className="beavers-team" key={team.id}>
+                  {team.logo && <img src={team.logo} alt={`${team.name} logo`} width={64} height={64} onError={(event) => { event.currentTarget.style.visibility = "hidden"; }} />}
+                  <Text fw={600}>{team.name}</Text>
+                  <Text className="beavers-score" fw={800}>{team.score}</Text>
+                </div>
+              ))}
+            </div>
+            <Text ta="center" fw={700} mt="sm">{game.status}</Text>
+            <Group justify="space-between" mt="sm">
+              <Text size="xs">Updated {pacificDateTime(new Date(game.updatedAt).toISOString())}</Text>
+              <a href={game.link} target="_blank" rel="noreferrer">Game details on ESPN</a>
+            </Group>
+          </Box>
+        ))}
+      </Stack>
+    </Card>
+  );
+}
+
 function Dashboard({
   layout,
   refreshMinutes,
@@ -1287,6 +1349,7 @@ function Dashboard({
           </ActionIcon>
         </Group>
       </div>
+      <BeaversPanel />
       {!ordered.length && <Empty>No panels selected. Use Manage panels to add some.</Empty>}
       <Modal opened={panelDraft !== null} onClose={() => { if (!savingPanels) setPanelDraft(null); }} title="Manage dashboard panels" centered>
         {panelDraft && <Stack>

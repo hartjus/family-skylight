@@ -8,6 +8,7 @@ import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { parseCalendarEvents, type ParsedCalendarEvent } from './ical.js';
 import { pacificWeekWindowForDate } from './week.js';
+import { createBeaversService } from './beavers.js';
 
 type Row = Record<string, unknown>;
 
@@ -211,6 +212,25 @@ async function syncAllSources() {
   return { total: sources.length, failed: results.filter(result => result.status === 'rejected').length };
 }
 
+const beaversGames = createBeaversService(
+  () => JSON.parse(setting('beavers_cache', '{}')),
+  cache => setSetting('beavers_cache', JSON.stringify(cache)),
+);
+app.get('/api/beavers', async () => beaversGames());
+// A single lightweight timer keeps the 6 a.m. check running even with no dashboard open.
+let beaversTimer: ReturnType<typeof setTimeout>;
+let stoppingBeavers = false;
+async function scheduleBeaversRefresh() {
+  let delay = 5 * 60_000;
+  try {
+    const result = await beaversGames();
+    delay = Math.max(1000, result.nextCheckAt - Date.now());
+  } catch { /* Retry local failures without interrupting the calendar. */ }
+  if (!stoppingBeavers) beaversTimer = setTimeout(() => { void scheduleBeaversRefresh(); }, delay);
+}
+app.addHook('onClose', async () => { stoppingBeavers = true; clearTimeout(beaversTimer); });
+
+
 app.get('/api/health', async () => ({ ok: true }));
 app.get('/api/settings', async () => serializeSettings());
 app.patch('/api/settings', async (request, reply) => { try {
@@ -295,3 +315,5 @@ if (process.env.NODE_ENV === 'production' && fs.existsSync(path.join(root, 'dist
 
 setTimeout(() => { const run = () => syncAllSources(); void run(); setInterval(run, 60 * 60 * 1000); }, 5_000);
 await app.listen({ port: Number(process.env.PORT ?? 3000), host: '0.0.0.0' });
+
+void scheduleBeaversRefresh();
